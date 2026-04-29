@@ -3,90 +3,89 @@
 ## 1. Governance Overview
 
 ### Governance Objectives
-- **Ensure Compliance:** To guarantee that the implementation strictly adheres to the defined architecture specifications (Phases A-F).
-- **Maintain Quality:** To enforce coding standards, security practices, and performance requirements.
-- **Manage Change:** To provide a clear process for managing any deviations or changes to the established architecture.
-
-### Governance Scope
-| Area | Governed By |
-|---|---|
-| **Code Architecture**| Automated static analysis (ArchUnit) and SonarQube quality gates. |
-| **API Design**| Automated contract testing against the OpenAPI specification. |
-| **Data Model**| Mandatory Flyway migration scripts for all schema changes. |
-| **Infrastructure**| Infrastructure as Code (IaC) validation and Kubernetes policies. |
-| **Security**| Automated SAST and dependency scanning in the CI/CD pipeline. |
-
----
+-   **Ensure Compliance:** Guarantee that the final implementation aligns with the architecture defined in Phases A through F.
+-   **Prevent Architecture Drift:** Use automated checks to detect and prevent deviations from the architectural design over time.
+-   **Maintain Quality:** Enforce coding standards, security practices, and performance requirements.
+-   **Enable Controlled Evolution:** Provide a clear process for making intentional changes to the architecture.
 
 ## 2. Architecture Compliance Criteria
 
 ### 2.1 Code Architecture Compliance
+
 | Criterion | Rule | Verification Method |
 |---|---|---|
-| **Layered Architecture**| The Service layer must not directly access the Controller layer. The Controller layer must not access the Repository layer. | ArchUnit tests integrated into the build process. |
-| **Naming Conventions**| All classes and methods must adhere to the conventions defined in Phase C. | Automated linting and SonarQube rules. |
+| **Layer Separation** | The Controller layer must not directly access the Repository layer. All business logic must go through the Service layer. | **Automated:** ArchUnit tests in the CI pipeline. |
+| **Package Structure** | All Java packages must follow the `com.bosch.shopfloor.*` convention. | **Automated:** Static analysis (SonarQube). |
+| **Dependency Control**| No new third-party libraries can be added without Tech Lead approval. | **Automated:** Dependency checker in the CI pipeline. |
 
 ### 2.2 API Compliance
+
 | Criterion | Rule | Verification Method |
 |---|---|---|
-| **API Contract**| All API responses must match the schemas defined in the OpenAPI specification. | Automated contract tests in the CI/CD pipeline. |
-| **Security**| Every endpoint must have the appropriate role-based authorization checks. | Manual code review and automated security scans. |
+| **API Contract** | All API endpoints must match the OpenAPI (Swagger) specification defined during development. | **Automated:** Contract testing in the CI pipeline. |
+| **Security** | All endpoints, except for a public health check, must require authentication and role-based authorization. | **Automated:** Integration tests that check for HTTP 401/403 responses on unauthenticated access. |
+
+### 2.3 Data Compliance
+
+| Criterion | Rule | Verification Method |
+|---|---|---|
+| **Schema Changes** | All database schema modifications must be performed via a Flyway migration script. | **Manual:** Code review of pull requests. |
+| **Data Access** | No raw SQL queries are permitted without explicit approval. Data access must use the Spring Data JPA repositories. | **Automated:** Static code analysis. |
 
 ---
 
 ## 3. Automated Enforcement
 
 ### 3.1 CI/CD Pipeline Gates
+The CI/CD pipeline in GitHub Actions is the primary mechanism for automated governance. A pull request cannot be merged to `main` if any of these gates fail.
+
 | Gate | Stage | Failure Action |
 |---|---|---|
-| **Unit & ArchUnit Tests**| Build | Block pull request merge. |
-| **SonarQube Quality Gate**| Build | Block pull request merge if quality gates fail (e.g., coverage < 80%). |
-| **Security Scan**| Build | Block pull request merge if critical vulnerabilities are found. |
-| **Integration & Contract Tests**| Test | Block deployment to the next environment. |
+| **Unit & Integration Tests**| Build | Block merge. |
+| **SonarQube Quality Gate**| Build | Block merge if criteria (e.g., coverage < 80%) are not met. |
+| **ArchUnit Tests** | Build | Block merge if architectural rules are violated. |
+| **Security Scan (SAST)** | Build | Block merge if new critical vulnerabilities are found. |
+| **Contract Tests** | Test | Block deployment to Staging if the API implementation deviates from the contract. |
 
 ### 3.2 Quality Gates (SonarQube)
+
 | Metric | Threshold |
 |---|---|
-| **Code Coverage** | >= 80% |
-| **Duplicated Lines** | <= 5% |
-| **Critical Security Vulnerabilities** | 0 |
+| Code Coverage | >= 80% |
+| Duplicated Lines | <= 5% |
+| Maintainability Rating| 'A' |
+| Critical Security Issues| 0 |
 
 ---
 
 ## 4. Review Processes
 
-### 4.1 Code Review Requirements
-- All pull requests must be reviewed by at least one other developer before merging.
-- Changes to core architectural components or security-sensitive areas require approval from the Tech Lead.
+### 4.1 Code Review (Pull Requests)
+-   **Standard Change:** Requires at least **one** approval from a peer developer.
+-   **Changes with DB Migration:** Requires approvals from **one peer developer** and the **Tech Lead**.
+-   **Changes to Core Security:** Requires approvals from the **Tech Lead** and a designated **Security Champion**.
 
-### 4.2 Architecture Decision Records (ADR)
-An ADR is required for any significant architectural decision that is not already covered by this documentation, such as:
-- Introducing a new major library or technology.
-- Changing a fundamental architectural pattern.
+### 4.2 Architecture Decision Records (ADRs)
+Significant architectural changes must be proposed and documented using a lightweight ADR process. An ADR is required for:
+-   Adding a new major dependency (e.g., a new database, a message queue).
+-   Changing a core architectural pattern.
+-   Deprecating an existing API endpoint.
 
 ---
 
 ## 5. Exception Handling
 
-### 5.1 Exception Request Process
-1. A developer identifies a need for an exception and discusses it with the Tech Lead.
-2. An ADR is created to document the justification, risks, and mitigation plan for the exception.
-3. The ADR is reviewed and must be approved by the Solution Architect.
-4. The approved exception is recorded in an "Exception Registry."
+Deviations from the defined architecture are strongly discouraged. However, if an exception is required, the following process must be followed:
+1.  **Request:** The developer creates an ADR documenting the need for the exception, the proposed alternative, and the trade-offs.
+2.  **Review:** The ADR is reviewed by the Tech Lead and the Solution Architect.
+3.  **Approval:** If approved, the ADR is merged, and the change can be implemented. The exception will be tracked and reviewed periodically.
 
 ---
 
 ## 6. Roles and Responsibilities
 
-| Role | Responsibilities |
+| Role | Governance Responsibilities |
 |---|---|
-| **Developer** | Write code that adheres to the architecture and quality standards. |
-| **Tech Lead** | Enforce standards within the team through code reviews and mentorship. Act as the first point of contact for architectural questions. |
-| **Solution Architect** | Own the architecture documents, approve exceptions, and periodically review the project for compliance. |
-
-### 7. Escalation Path
-`Developer` -> `Tech Lead` -> `Solution Architect`
-
----
-
-This governance framework is designed to be lightweight yet effective, leveraging automation to ensure the final product is secure, reliable, and true to its architectural vision.
+| **Developer** | Write code that adheres to the architecture. Write tests to prove compliance. |
+| **Tech Lead** | Conduct code reviews to enforce standards. Approve database changes and ADRs. |
+| **Solution Architect** | Own the architecture documents. Review and approve significant architectural changes (ADRs). |
