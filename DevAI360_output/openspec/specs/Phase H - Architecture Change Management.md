@@ -3,84 +3,91 @@
 ## 1. Change Management Overview
 
 ### Purpose
-To establish a clear and controlled process for managing changes to the application's architecture after the initial deployment. This ensures that the system remains stable, secure, and aligned with its original design principles, while still allowing for necessary evolution.
+To establish a structured process for managing changes to the Shopfloor Material Supply System's architecture. This ensures that the system evolves in a controlled, traceable, and stable manner, preserving the integrity of the original design while adapting to new requirements.
 
 ### Scope
+
 | In Scope | Out of Scope |
 |---|---|
-| Changes to architectural patterns (e.g., introducing a new service). | Bug fixes that do not alter the architecture. |
-| Changes to the core technology stack. | Minor UI/UX adjustments. |
-| Modifications to the API contract (breaking changes). | Configuration changes in different environments. |
-| Significant changes to the database schema. | Simple feature additions that follow existing patterns. |
+| Changes to architectural patterns (e.g., C-S-R). | Minor bug fixes with no architectural impact. |
+| Introduction of new technologies (e.g., a new database). | Feature implementation that conforms to the existing architecture. |
+| Breaking changes to API contracts. | UI/UX text or style changes. |
+| Changes to the core data model. | Simple configuration updates (e.g., changing a timeout value).|
 
 ---
 
 ## 2. Change Classification
 
+### Classification Matrix
+
 | Category | Impact | Risk | Examples |
 |---|---|---|---|
-| **Minor**| Localized | Low | Adding a new, non-breaking field to an API response. |
-| **Standard**| Module-level| Medium | Adding a new API endpoint that follows existing patterns. |
-| **Major**| System-wide | High | Changing the authentication mechanism or replacing a core technology. |
-| **Emergency**| Variable | Critical| Patching a critical security vulnerability. |
+| **Minor** | Localized to a single component | Low | Adding a new, non-breaking field to an API response; adding a new, simple read-only endpoint. |
+| **Standard**| Affects multiple components | Medium | Adding a new database table and associated API endpoints; introducing a new, small third-party library. |
+| **Major** | System-wide, fundamental change | High | Changing the primary database technology; altering the authentication mechanism from JWT to something else. |
 
 ---
 
 ## 3. Change Request Process
 
-### 3.1 Request Template
-All architecture change requests (ACRs) will be submitted as a GitHub issue using a standardized template that includes:
-- **Description:** What is the change and why is it needed?
-- **Classification:** Minor, Standard, Major, or Emergency.
-- **Impact Assessment:** What components, APIs, or data models are affected?
-- **Implementation Plan:** A high-level plan for implementing the change.
-- **Rollback Plan:** How can the change be safely reversed if issues occur?
+All architectural changes must be initiated via an **Architecture Change Request (ACR)**, which should be created as an issue or a document in the project's repository.
 
-### 3.2 Workflow
-`GitHub Issue Created` -> `Classification & Impact Assessment` -> `Approval` -> `Implementation` -> `Validation & Closure`
+### 3.1 ACR Template
+```markdown
+# ACR-XXXX: [Brief Title of Change]
+
+- **Requester:** [Your Name]
+- **Date:** [YYYY-MM-DD]
+- **Classification:** [Minor / Standard / Major]
+
+## 1. Change Description
+A clear description of the proposed change and the business or technical driver behind it.
+
+## 2. Impact Assessment
+Analysis of the potential impact on other components, performance, security, and operations. List any breaking changes.
+
+## 3. Implementation Plan
+A high-level plan for how the change will be implemented, tested, and rolled out.
+
+## 4. Rollback Plan
+A clear plan for how to revert the change if it causes issues.
+```
+
+### 3.2 Approval Workflow
+1.  **Draft:** An ACR is created.
+2.  **Review:** The ACR is reviewed by the appropriate stakeholders.
+3.  **Approval:** The ACR is approved or rejected.
+4.  **Implementation:** The change is implemented and deployed.
+5.  **Validation:** The change is validated in production.
+6.  **Closed:** The ACR is closed.
 
 ### 3.3 Approval Matrix
+
 | Category | Approvers |
 |---|---|
 | **Minor** | Tech Lead |
-| **Standard** | Tech Lead + Solution Architect |
-| **Major** | Tech Lead + Solution Architect + Key Stakeholders |
-| **Emergency**| Tech Lead (with a post-implementation review by the Solution Architect) |
+| **Standard**| Tech Lead + Solution Architect |
+| **Major** | Tech Lead + Solution Architect + Business Stakeholder |
 
 ---
 
-## 4. Impact Assessment
+## 4. Architecture Versioning
 
-A brief impact assessment must be completed for every change, considering:
-- **Technical Impact:** Will this be a breaking change? Does it require data migration?
-- **Operational Impact:** Will this require downtime? Will monitoring need to be updated?
-- **Business Impact:** Does this change affect the user experience or business workflow?
+The architecture documentation will be versioned alongside the software. Major releases of the software that include significant architectural changes will result in a new minor or major version bump of the architecture documents.
 
----
-
-## 5. Architecture Versioning
-
-- **Architecture Documents:** The set of architecture documents in Git will be tagged with a version number (e.g., v1.0, v1.1) to represent the current state of the architecture.
-- **API:** The API will be versioned in the URL (e.g., `/api/v1`, `/api/v2`) if a breaking change is introduced.
+- **API Versioning:** The API will be versioned in the URL (e.g., `/api/v1`). Any breaking change requires a new version (`/api/v2`).
+- **Data Schema:** The database schema is versioned continuously via Flyway scripts.
 
 ---
 
-## 6. Communication
+## 5. Post-Change Validation
 
-- **Minor Changes:** Communicated within the development team.
-- **Standard Changes:** Communicated to all technical teams via a shared channel (e.g., Slack).
-- **Major Changes:** Communicated broadly to all stakeholders, including product and business teams, well in advance of the implementation.
+After an architectural change is deployed, it must be validated to ensure it has met its goals without introducing unintended negative consequences.
 
----
-
-## 7. Post-Change Validation
-
-After a change is implemented, it must be validated to ensure:
-- All related automated tests are passing.
-- The system remains stable and performant.
-- There are no new security vulnerabilities.
-- The documentation has been updated to reflect the change.
+- **Technical Validation:** Key performance indicators (latency, error rate) and resource usage must be monitored to ensure they remain within acceptable limits.
+- **Business Validation:** The product owner or a business stakeholder must confirm that the change correctly implements the new business requirement.
+- **Compliance Validation:** Automated architecture tests (ArchUnit) must continue to pass.
 
 ---
 
-This framework ensures that the Shopfloor Material Supply System's architecture can evolve in a controlled and deliberate manner, balancing the need for agility with the need for stability and reliability.
+This framework ensures that as the system grows and evolves, it does so in a way that is deliberate, managed, and aligned with both technical and business objectives.
