@@ -2,135 +2,125 @@
 
 ## 1. Implementation Overview
 
+This document outlines the plan for developing, testing, and deploying the Shopfloor Material Supply System.
+
+### Development Methodology
+- **Methodology:** Agile/Scrum
+- **Sprint Duration:** 2 weeks
+- **Release Cadence:** A single MVP release, followed by potential iterative enhancements.
+
 ### Project Timeline
-This project will be executed in a phased approach, with each phase delivering a distinct set of capabilities. The development will follow a 2-week sprint cadence.
 
-| Phase | Duration | Focus |
+| Phase | Duration | Focus | Sprints |
+|---|---|---|---|
+| **Phase 1: Foundation** | 2 weeks | Infrastructure, CI/CD, Application Scaffolding | 1 |
+| **Phase 2: Core Development**| 4 weeks | Backend API and Frontend UI for the core workflow | 2-3 |
+| **Phase 3: Hardening** | 2 weeks | Integration Testing, Security, and Polish | 4 |
+| **Phase 4: Deployment** | 2 weeks | UAT, Production Deployment, and Monitoring Setup | 5 |
+
+---
+
+## 2. Phase 1: Foundation (Sprint 1)
+
+### Goals
+- Establish the development environment, source control, and CI/CD automation.
+- Create the initial, runnable skeletons for the backend and frontend applications.
+
+### Deliverables
+
+| ID | Deliverable | Acceptance Criteria |
 |---|---|---|
-| **Phase 1: Foundation** | 2 Sprints (4 weeks) | Infrastructure, CI/CD, and application scaffolding. |
-| **Phase 2: Core Development** | 3 Sprints (6 weeks) | Backend API and frontend UI for the core workflow. |
-| **Phase 3: Admin & Hardening**| 2 Sprints (4 weeks) | Admin features, security, and performance tuning. |
-| **Phase 4: Deployment** | 1 Sprint (2 weeks) | Production deployment and go-live. |
-
-### Team Allocation
-A standard agile team will be allocated: 1 Tech Lead, 2 Backend Devs, 1 Frontend Dev, 1 DevOps, and 1 QA.
+| F1.1 | Git Repository & CI | Repo created with protected `main` branch. CI pipeline builds and runs unit tests on every push. |
+| F1.2 | Local Dev Environment | A `docker-compose.yml` exists that starts the backend, database, and frontend for local development. |
+| F1.3 | Application Scaffolds | A "Hello World" endpoint is reachable on the Spring Boot app. The base Angular app loads in the browser. |
+| F1.4 | Initial DB Migration | The initial Flyway script to create the `users` and `delivery_orders` tables is created and runs successfully. |
 
 ---
 
-## 2. Phase 1: Foundation (Sprints 1-2)
+## 3. Phase 2: Core Development (Sprints 2-3)
 
-### Sprint 1: Infrastructure & CI/CD
-**Goal:** Establish the foundational infrastructure and a working CI/CD pipeline.
-**Deliverables:**
-- Git repository with a documented branching strategy (GitFlow).
-- A basic CI/CD pipeline in GitHub Actions that builds and tests the initial applications.
-- Kubernetes manifests (or Docker Compose file) for local development.
+### Goals
+- Implement the "golden path" business logic for the material supply workflow.
+- Build the necessary API endpoints and UI components for Production and Warehouse users.
 
-### Sprint 2: Application Scaffolding
-**Goal:** Create the basic structure for the backend and frontend applications.
-**Deliverables:**
-- A runnable Spring Boot application with a health-check endpoint.
-- A runnable Angular application with basic routing set up.
-- Flyway configured with an initial script to create the database schema.
+### Deliverables
 
----
-
-## 3. Phase 2: Core Development (Sprints 3-5)
-
-### Sprint 3: Backend Core API
-**Goal:** Implement the core API endpoints for creating and viewing orders.
-**Deliverables:**
-- `POST /api/v1/orders` and `GET /api/v1/orders` endpoints are fully functional.
-- Service layer logic and repository layer for `User` and `DeliveryOrder` entities.
-- Unit and integration tests for the new endpoints.
-
-### Sprint 4: Backend State Machine
-**Goal:** Implement the status transition logic for orders.
-**Deliverables:**
-- `PATCH /api/v1/orders/{id}/status` endpoint is functional.
-- The backend enforces the state transition rules defined in the Business Architecture.
-- RBAC is implemented to ensure only authorized users can change statuses.
-
-### Sprint 5: Frontend Workflow
-**Goal:** Build the UI for the core user workflow.
-**Deliverables:**
-- A UI for Production Line Users to create orders and view their status.
-- A UI for Warehouse Users to view new orders and update their status.
-- The frontend is fully integrated with the backend APIs developed in Sprints 3 & 4.
+| ID | Deliverable | Acceptance Criteria |
+|---|---|---|
+| C2.1 | Core API Endpoints | All endpoints defined in the Application Architecture for creating and updating orders are implemented with full business logic and RBAC. |
+| C2.2 | Core UI for Production | Production users can log in, create a new material request, and see the status of their requests. |
+| C2.3 | Core UI for Warehouse| Warehouse users can log in, see a list of new orders, and update the status of orders. |
+| C2.4 | Unit & Integration Tests| Backend service logic has >80% unit test coverage. API endpoints have integration tests. |
 
 ---
 
-## 4. Phase 3: Admin & Hardening (Sprints 6-7)
+## 4. Phase 3: Hardening (Sprint 4)
 
-### Sprint 6: Admin Functionality
-**Goal:** Implement the administrative features.
-**Deliverables:**
-- An admin dashboard to view all orders.
-- Functionality for admins to manually edit or delete any order.
-- The `DELETE /api/v1/orders/{id}` endpoint is implemented with strict admin-only access.
+### Goals
+- Implement Admin functionality.
+- Finalize security measures, write end-to-end tests, and polish the user experience.
 
-### Sprint 7: Security & Performance
-**Goal:** Harden the application for production use.
-**Deliverables:**
-- Security scans (SAST, dependency checking) are integrated into the CI/CD pipeline.
-- Performance and load testing to ensure the application meets NFRs.
-- Final code cleanup and documentation.
+### Deliverables
+
+| ID | Deliverable | Acceptance Criteria |
+|---|---|---|
+| H3.1 | Admin UI | Admins can view all orders and manually edit or delete them as per the business rules. |
+| H3.2 | End-to-End Tests | Automated E2E tests cover the complete "golden path" workflow. |
+| H3.3 | Security Hardening | All dependencies are scanned for vulnerabilities. Security headers are implemented. |
+| H3.4 | API & User Docs | A basic Swagger/OpenAPI documentation is generated for the API. A simple user guide is written. |
 
 ---
 
-## 5. Phase 4: Deployment (Sprint 8)
+## 5. Phase 4: Deployment (Sprint 5)
 
-### Sprint 8: Production Release
-**Goal:** Deploy the application to the production environment.
-**Deliverables:**
-- The application is successfully deployed to the production Kubernetes cluster.
-- Monitoring dashboards and alerts in Prometheus/Grafana are active.
-- A final go-live check is completed.
+### Goals
+- Deploy the application to Staging for User Acceptance Testing (UAT).
+- Deploy the approved application to the Production environment.
+- Configure monitoring and alerting.
+
+### Deliverables
+
+| ID | Deliverable | Acceptance Criteria |
+|---|---|---|
+| D4.1 | Staging Deployment | The application is successfully deployed to the STAGING environment and is accessible to business stakeholders for UAT. |
+| D4.2 | Production Deployment | Upon UAT sign-off, the application is deployed to the PROD environment. |
+| D4.3 | Monitoring Configured | Grafana dashboards are set up to monitor key application metrics. Alertmanager is configured to send alerts for critical issues. |
 
 ---
 
 ## 6. Migration Strategy
 
-- **Migration Type:** **Greenfield**. No data migration is required as this is a new system replacing a manual process.
+-   [x] **Greenfield (no migration needed)**
+-   This is a new system replacing a manual process. There is no existing electronic data to migrate.
 
 ---
 
-## 7. Rollout Strategy
+## 7. Rollout & Rollback Strategy
 
-### Environment Progression
-`Local DEV` -> `CI/CD Test Env` -> `STAGING` -> `PROD`
+### Rollout
+-   **Strategy:** A "Big Bang" release where all users are given access to the new system at the same time.
+-   **Environment Progression:** `DEV` → `TEST` (via CI) → `STAGING` → `PROD`
 
-### Rollback Procedures
-| Scenario | Procedure | RTO |
-|---|---|---|
-| **Failed Deployment** | A rollback to the previously deployed stable version will be triggered automatically by the CI/CD pipeline if health checks fail. | < 10 minutes |
-| **Critical Bug Found Post-Launch**| The deployment will be rolled back to the previous stable version. | < 10 minutes |
+### Rollback
+-   **Application:** In case of a critical failure during deployment, a rollback to the previous stable version will be executed via Kubernetes deployment commands. **RTO: < 10 minutes.**
+-   **Database:** Database changes are forward-only via Flyway. A critical issue would require a "roll-forward" fix with a new migration script. In a catastrophic failure, the database would be restored from the last backup. **RTO: < 1 hour.**
 
 ---
 
 ## 8. Success Metrics
 
 ### Technical Metrics
-| Metric | Target |
-|---|---|
-| **Availability** | 99.5% |
-| **API Response Time (p95)**| < 500ms |
-| **Error Rate**| < 0.5% |
 
-### Business Metrics
-| Metric | Target |
-|---|---|
-| **User Adoption** | 90% of material requests are made through the system within the first month. |
-| **Order Fulfillment Time**| A 20% reduction in the average time from request to completion within the first quarter. |
-
----
-
-## 9. Milestones
-
-| Milestone | Target Sprint | Criteria |
+| Metric | Target | Measurement |
 |---|---|---|
-| **M1: Foundation Complete** | End of Sprint 2 | CI/CD pipeline is operational. |
-| **M2: Core API Complete** | End of Sprint 4 | All backend business logic is implemented and tested. |
-| **M3: Feature Complete** | End of Sprint 6 | All user and admin features are implemented and integrated. |
-| **M4: Production Ready** | End of Sprint 7 | Application is secure, performant, and ready for release. |
-| **M5: Go-Live** | End of Sprint 8 | The application is live in the production environment. |
+| Availability | 99.5% during production hours| Uptime monitoring (Prometheus) |
+| p99 Response Time| < 1 second | APM / Prometheus |
+| Error Rate | < 0.5% | Logging / Prometheus |
+
+### Business Metrics (from PRD)
+
+| Metric | Target | Measurement |
+|---|---|---|
+| Order Fulfillment Time| Reduce average time by 30% | Analytics on `delivery_orders` timestamps. |
+| Order Accuracy | Decrease incorrect deliveries by 95%| Manual tracking / User feedback. |
+| Request Visibility | 100% of requests tracked | Application database query. |
