@@ -2,109 +2,100 @@
 
 ## 1. Infrastructure Overview
 
+This document specifies the infrastructure and operational architecture for the Shopfloor Material Supply System. All infrastructure should be managed as code (IaC).
+
 ### Container Platform
-- **Runtime:** Docker for containerizing the Spring Boot backend and the Angular frontend.
-- **Orchestration:** Docker Compose will be used for local development and testing environments. For Staging and Production, the application will be deployed to a Kubernetes cluster.
-- **Registry:** A private container registry (e.g., GitHub Container Registry, Docker Hub Private, or Bosch internal registry) will be used to store the Docker images.
+-   **Runtime:** Docker will be used to containerize the Spring Boot backend and the Angular frontend applications.
+-   **Orchestration:**
+    -   **Local/Dev:** `docker-compose` will be used for local development environments.
+    -   **Staging/Prod:** Kubernetes is the target orchestration platform for automated deployment, scaling, and management.
+-   **Registry:** All Docker images will be stored in a private container registry (e.g., GitHub Container Registry, Artifactory).
 
 ### Deployment Environments
-| Environment | Purpose | Scaling | Resources |
+
+| Environment | Purpose | Scaling | Notes |
 |---|---|---|---|
-| **DEV (Local)** | Local development | 1 replica | Minimal (Docker Compose) |
-| **TEST** | CI/CD Integration Testing | 1 replica | Minimal (Kubernetes) |
-| **STAGING** | Pre-production validation | 2 replicas | Production-like (Kubernetes) |
-| **PROD** | Production | 3+ replicas (auto-scaling) | Full (Kubernetes) |
+| **DEV** | Local developer machines | 1 replica per service | Uses `docker-compose`. Connects to a shared dev database. |
+| **TEST** | Automated integration & E2E testing | 1 replica per service | Deployed via CI/CD. Resets database on each run. |
+| **STAGING** | Pre-production user acceptance testing (UAT)| 2 replicas per service | Mirrors production configuration. Uses a production-like database. |
+| **PROD** | Live production environment | 3+ replicas (auto-scaled) | Highly available, monitored, and backed up. |
 
 ---
 
 ## 2. Network Architecture
 
 ### Ingress Configuration
-- **Load Balancer:** A standard cloud load balancer (e.g., AWS ALB, Azure Load Balancer) will be managed by a Kubernetes Ingress Controller (e.g., NGINX).
-- **TLS Termination:** TLS will be terminated at the Ingress Controller. Certificates will be managed using Let's Encrypt with cert-manager.
-- **DNS:** A subdomain will be used, e.g., `shopfloor-supply.your-company.com`.
+-   **API Gateway:** All incoming traffic from end-users MUST pass through the **Bosch Px Proxy**.
+-   **TLS Termination:** The Px Proxy is responsible for TLS termination. All traffic within the cluster can be unencrypted, but mTLS is recommended for future high-security needs.
+-   **DNS:** The application will be accessible via a standard DNS name, e.g., `shopfloor-supply.bosch.com`.
 
 ### Service Communication
-- **Internal:** Within the Kubernetes cluster, services will communicate using standard Kubernetes DNS.
-- **External:** All external traffic will be routed through the Bosch Px Proxy, which will then forward requests to the application's Ingress Controller.
-
-### Network Policies
-- By default, all pod-to-pod communication will be denied.
-- Explicit `NetworkPolicy` resources will be created to allow traffic from the Ingress Controller to the frontend and backend services, and from the frontend service to the backend service.
+-   The Angular frontend, running in the user's browser, communicates with the backend via the public-facing API Gateway.
+-   Internal communication between any future backend microservices will be handled via Kubernetes service discovery (e.g., `http://order-service:8080`).
 
 ---
 
 ## 3. Database Infrastructure
 
 ### PostgreSQL Configuration
-- **Version:** 15+
-- **Connection Pooling:** The Spring Boot application will use HikariCP for connection pooling. For high-concurrency scenarios, an external pooler like PgBouncer will be considered.
-- **Backup Strategy:** Daily automated snapshots with Point-in-Time Recovery (PITR) enabled, retained for 30 days.
-- **Replication:** For the Production environment, a primary-replica setup will be used for high availability.
+-   **Version:** 15+
+-   **Deployment:** Deployed as a stateful set in Kubernetes or consumed as a managed service (e.g., AWS RDS).
+-   **Backup Strategy:** Daily automated snapshots with Point-in-Time Recovery (PITR) enabled. Backups must be retained for at least 30 days.
+-   **Replication:** A primary-replica setup is required for the PROD environment to ensure high availability.
 
 ---
 
 ## 4. Security Infrastructure
 
 ### Authentication & Authorization
-- **Protocol:** The system will use a simple, token-based authentication for the MVP. JWTs (JSON Web Tokens) will be issued upon successful login.
-- **Identity Provider:** For the MVP, a simple internal user store will be used. Post-MVP, this will be integrated with an enterprise OIDC provider.
-- **Token Storage:** JWTs will be stored in a secure, HttpOnly cookie to mitigate XSS risks.
+-   **Protocol:** OAuth 2.0 / OpenID Connect (OIDC) will be the standard for authentication.
+-   **Identity Provider (IdP):** An existing enterprise IdP should be used. For the MVP, a simple in-app user store is acceptable as defined in the Data Architecture, but the API must be secured with JWTs.
+-   **Token Format:** JSON Web Tokens (JWT). The backend will validate the JWT signature and claims on every request.
 
 ### Secrets Management
-- **Storage:** Kubernetes Secrets will be used to store all sensitive information, such as database credentials, API keys, and JWT signing keys.
-- **Access:** Secrets will be mounted into pods as environment variables or files with restricted access.
-
-### TLS Configuration
-- **Minimum:** TLS 1.2 will be enforced for all external traffic.
-- **Certificates:** Managed by Let's Encrypt.
+-   **Storage:** All secrets (database passwords, API keys, etc.) must be stored in Kubernetes Secrets. They will be mounted into application pods as environment variables or files.
+-   **Rule:** Secrets must never be stored in Git or baked into Docker images.
 
 ---
 
 ## 5. Monitoring & Observability
 
 ### Metrics
-- **Tool:** Prometheus will be used to scrape metrics from the Spring Boot backend (via Actuator) and the Kubernetes cluster.
-- **Dashboards:** Grafana will be used to visualize key metrics, including request latency, error rates, and JVM performance.
+-   **Tool:** Prometheus will be used to scrape metrics from the Spring Boot backend (via Actuator) and the Kubernetes cluster.
+-   **Dashboards:** Grafana will be used to visualize key metrics, including request latency (p99), error rates (HTTP 5xx), and resource utilization.
 
 ### Logging
-- **Tool:** A cluster-level logging solution like the ELK stack (Elasticsearch, Logstash, Kibana) will be used.
-- **Log Format:** Logs will be in a structured JSON format to enable easy parsing and querying.
+-   **Tool:** The ELK Stack (Elasticsearch, Logstash, Kibana) or Loki.
+-   **Log Format:** All applications must log in a structured **JSON** format to stdout. Logs must include a timestamp, log level, service name, and a trace ID for correlation.
+-   **Retention:** Logs will be retained for a minimum of 30 days.
 
 ### Alerting
-- **Tool:** Prometheus Alertmanager will be used to send alerts to a designated channel (e.g., Slack, email).
-- **Key Alerts:**
-  - High API error rate (>5% over 5 minutes).
-  - High request latency (p99 > 1.5s).
-  - Service unavailability.
+-   **Tool:** Alertmanager (part of the Prometheus ecosystem).
+-   **Critical Alerts:**
+    -   API error rate > 5% over a 5-minute period.
+    -   p99 request latency > 2 seconds.
+    -   Service is down (no running pods).
 
 ---
 
 ## 6. CI/CD Pipeline
 
-### Pipeline Stages
-`Build` -> `Test` -> `Security Scan` -> `Deploy to STAGING` -> `Manual Approval` -> `Deploy to PROD`
+### Tool
+-   A GitHub Actions workflow will be created to automate the build, test, and deployment process.
 
-### Stage Requirements
-| Stage | Actions | Gate |
-|---|---|---|
-| **Build** | Compile code, run unit tests, build Docker image. | All unit tests must pass. |
-| **Test** | Run integration and API tests against a test database. | All integration tests must pass. |
-| **Security Scan** | Scan for vulnerabilities in dependencies and container images. | No critical vulnerabilities found. |
-| **Deploy STAGING** | Automatically deploy the new version to the Staging environment. | Successful security scan. |
-| **Deploy PROD** | A manual approval step is required before deploying to Production. | Successful staging deployment and QA sign-off. |
+### Pipeline Stages
+1.  **Build:** Compile Java code, run Maven/Gradle build.
+2.  **Unit Test:** Run all JUnit tests.
+3.  **Code Quality Scan:** Integrate with SonarQube to fail the build on critical quality issues.
+4.  **Build Image:** Build and push Docker images to the container registry.
+5.  **Deploy to TEST:** Automatically deploy to the TEST environment and run integration tests.
+6.  **Deploy to STAGING:** If TEST passes, automatically deploy to STAGING.
+7.  **Deploy to PROD:** This step requires **manual approval** after successful UAT in STAGING.
 
 ---
 
 ## 7. Disaster Recovery
 
-### Backup Strategy
-| Component | Frequency | Retention | Recovery Time Objective (RTO) |
-|---|---|---|---|
-| **Database** | Daily full backup | 30 days | < 1 hour |
-| **Configurations** | Stored in Git (IaC) | Indefinite | < 30 minutes |
-
-### Recovery Procedures
-- **Application:** A rollback to a previous stable version can be triggered via the CI/CD pipeline.
-- **Database:** The database can be restored from the latest snapshot in case of catastrophic failure.
-- **Full Disaster:** The entire infrastructure is defined as code (Kubernetes YAML, Terraform), allowing for a full rebuild in a new environment if necessary. The RTO for a full rebuild is estimated at < 4 hours.
+-   **RTO (Recovery Time Objective):** 4 hours.
+-   **RPO (Recovery Point Objective):** 15 minutes.
+-   **Strategy:** In case of a full cluster failure, the recovery strategy is to redeploy the entire application from code and Docker images using the IaC scripts. The database will be restored from the latest successful backup (PITR).
