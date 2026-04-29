@@ -3,15 +3,15 @@
 ## 1. Data Architecture Overview
 
 ### Data Principles
-- **Single Source of Truth:** Each business entity (e.g., a Delivery Order) will have a single, authoritative record in the database.
-- **Data Integrity:** Constraints (e.g., NOT NULL, foreign keys) will be enforced at the database level to ensure the data is always valid.
-- **Audit Trail:** All changes to critical data, especially order status, will be logged for accountability and traceability.
-- **Soft Delete:** Orders will be soft-deleted to allow for recovery and to maintain historical data integrity.
+- **Single Source of Truth:** The PostgreSQL database is the definitive source for all application data.
+- **Integrity by Design:** Data integrity is enforced at the database level using constraints (PK, FK, CHECK) to prevent invalid data.
+- **Auditability:** All state changes to critical entities (Delivery Orders) must be logged for traceability.
+- **Security First:** Sensitive data, such as user credentials, must be hashed, not stored in plaintext.
 
 ### Technology Stack
 - **Database:** PostgreSQL 15+
 - **ORM:** Spring Data JPA
-- **Migrations:** Flyway for schema migrations.
+- **Migrations:** Flyway for schema version control.
 - **Caching:** Not required for MVP.
 
 ---
@@ -20,109 +20,101 @@
 
 ### 2.1 Core Entities
 
-| Entity | Description |
-|---|---|
-| **User** | Represents an individual who can log in to the system (Production, Warehouse, or Admin). |
-| **DeliveryOrder** | Represents a single material supply request from creation to completion. |
+| Entity | Description | Owner |
+|---|---|---|
+| **User** | Represents an actor in the system (Production, Warehouse, Admin). | System |
+| **DeliveryOrder** | Represents a single material supply request and its entire lifecycle. | Business |
 
 ### 2.2 Entity Relationships
 
-`User (1) ---- (N) DeliveryOrder` (One user can create many orders)
+A User can create many Delivery Orders.
 
----
-
-### 2.3 Entity Attributes
-
-**Entity: User**
-| Attribute | Type | Nullable | Description |
-|---|---|---|---|
-| id | UUID | No | Primary key |
-| username | String | No | Unique login identifier |
-| password_hash | String | No | Hashed password |
-| role | String | No | User role ('PRODUCTION_LINE', 'WAREHOUSE', 'ADMIN') |
-| created_at | TIMESTAMP | No | Creation timestamp |
-| updated_at | TIMESTAMP | No | Last update timestamp |
-
-**Entity: DeliveryOrder**
-| Attribute | Type | Nullable | Description |
-|---|---|---|---|
-| id | UUID | No | Primary key |
-| material_id | String | No | Identifier for the requested material |
-| quantity | Integer | No | The amount of material requested |
-| destination | String | No | The production line where the material is needed |
-| status | String | No | The current state of the order ('NEW', 'IN_PREPARATION', etc.) |
-| created_by_id | UUID | No | Foreign key to the User who created the order |
-| created_at | TIMESTAMP | No | Creation timestamp |
-| updated_at | TIMESTAMP | No | Last update timestamp |
-| is_deleted | Boolean | No | Flag for soft deletion |
+```
+User (1) ----< (N) DeliveryOrder
+```
 
 ---
 
 ## 3. Physical Data Model
 
-### 3.1 Database Schema
-- **Schema Name:** `shopfloor_supply`
+### 3.1 Naming Conventions
+
+| Element | Convention | Example |
+|---|---|---|
+| Table | `snake_case`, plural | `delivery_orders`, `users` |
+| Column | `snake_case` | `created_at`, `order_status` |
+| Primary Key | `id` | `id` |
+| Foreign Key | `{table_name_singular}_id` | `user_id` |
+| Index | `idx_{table}_{columns}` | `idx_orders_status` |
 
 ### 3.2 Table Definitions
 
-**Table: users**
+**Table: `users`**
+
 | Column | Type | Constraints | Index |
 |---|---|---|---|
-| id | UUID | PK, NOT NULL | PK |
-| username | VARCHAR(255) | UNIQUE, NOT NULL | UQ |
-| password_hash | VARCHAR(255) | NOT NULL | - |
-| role | VARCHAR(50) | NOT NULL | IDX |
-| created_at | TIMESTAMPTZ | NOT NULL, DEFAULT NOW() | - |
-| updated_at | TIMESTAMPTZ | NOT NULL, DEFAULT NOW() | - |
+| `id` | `UUID` | PK, NOT NULL | PK |
+| `username` | `VARCHAR(255)` | UNIQUE, NOT NULL | UQ |
+| `password_hash`| `VARCHAR(255)` | NOT NULL | - |
+| `role` | `VARCHAR(50)` | NOT NULL, CHECK (role IN ('PRODUCTION', 'WAREHOUSE', 'ADMIN')) | IDX |
+| `created_at` | `TIMESTAMPTZ` | NOT NULL, DEFAULT NOW() | - |
+| `updated_at` | `TIMESTAMPTZ` | NOT NULL, DEFAULT NOW() | - |
 
-**Table: delivery_orders**
+**Table: `delivery_orders`**
+
 | Column | Type | Constraints | Index |
 |---|---|---|---|
-| id | UUID | PK, NOT NULL | PK |
-| material_id | VARCHAR(255) | NOT NULL | - |
-| quantity | INT | NOT NULL | - |
-| destination | VARCHAR(255) | NOT NULL | - |
-| status | VARCHAR(50) | NOT NULL | IDX |
-| created_by_id | UUID | FK to users(id), NOT NULL | IDX |
-| created_at | TIMESTAMPTZ | NOT NULL, DEFAULT NOW() | - |
-| updated_at | TIMESTAMPTZ | NOT NULL, DEFAULT NOW() | - |
-| is_deleted | BOOLEAN | NOT NULL, DEFAULT FALSE | IDX |
+| `id` | `UUID` | PK, NOT NULL | PK |
+| `material_id`| `VARCHAR(100)` | NOT NULL | - |
+| `quantity` | `INTEGER` | NOT NULL, CHECK (quantity > 0) | - |
+| `destination_line`| `VARCHAR(100)`| NOT NULL | - |
+| `status` | `VARCHAR(50)` | NOT NULL, CHECK (status IN ('NEW', 'IN_PREPARATION', 'IN_TRANSIT', 'COMPLETED')) | IDX |
+| `requester_id`| `UUID` | NOT NULL, FK to users(id) ON DELETE RESTRICT | FK |
+| `created_at` | `TIMESTAMPTZ` | NOT NULL, DEFAULT NOW() | IDX |
+| `updated_at` | `TIMESTAMPTZ` | NOT NULL, DEFAULT NOW() | - |
 
-### 3.3 Naming Conventions
-| Element | Convention | Example |
-|---|---|---|
-| Table | snake_case, plural | `users`, `delivery_orders` |
-| Column | snake_case | `created_at`, `material_id` |
-| Primary Key | `id` | `id` |
-| Foreign Key | `{table}_id` | `created_by_id` |
-| Index | `idx_{table}_{columns}` | `idx_delivery_orders_status` |
+### 3.3 Index Strategy
 
-### 3.4 Index Strategy
 | Table | Index | Columns | Type | Rationale |
 |---|---|---|---|---|
-| delivery_orders | idx_delivery_orders_status | status | B-tree | To quickly query orders by their current status. |
-| delivery_orders | idx_delivery_orders_created_by | created_by_id | B-tree | To efficiently retrieve orders for a specific user. |
-| users | idx_users_role | role | B-tree | To quickly find users by their assigned role. |
+| `users` | `idx_users_role` | `role` | B-tree | To quickly find users by their role. |
+| `delivery_orders`| `idx_orders_status`| `status` | B-tree | To efficiently query orders by their current status, which is a primary use case for warehouse users. |
+| `delivery_orders`| `idx_orders_requester_id`| `requester_id`| B-tree | Foreign key index to support joins and queries for a specific user's orders. |
+| `delivery_orders`| `idx_orders_created_at`| `created_at`| B-tree | To allow efficient sorting of orders by creation time. |
 
 ---
 
 ## 4. Data Integrity
 
-- **Referential Integrity:** The `created_by_id` in `delivery_orders` MUST correspond to a valid `id` in the `users` table. `ON DELETE` will be `RESTRICT` to prevent user deletion if they have associated orders.
+- **Referential Integrity:** The `requester_id` in `delivery_orders` must always point to a valid record in the `users` table. `ON DELETE RESTRICT` is used to prevent a user from being deleted if they have associated orders.
 - **Business Constraints:**
-  - `delivery_orders.quantity` must be greater than 0.
-  - `users.role` must be one of the predefined roles.
-- **Validation:** All validation rules (e.g., non-null fields) will be enforced by database constraints and checked in the application's service layer before attempting a database operation.
+    - `users.role` is restricted to the three valid roles.
+    - `delivery_orders.quantity` must be a positive integer.
+    - `delivery_orders.status` is restricted to the four valid states in the lifecycle.
 
 ---
 
-## 5. Data Lifecycle
+## 5. Data Migration
 
-- **Data States:** `ACTIVE`, `DELETED` (soft-deleted). Archiving is not in scope for the MVP.
-- **Retention Policies:**
-  - Soft-deleted records will be purged after 90 days.
-  - Completed orders will be kept for 7 years before being archived (post-MVP).
-- **Audit Trail:** An `audit_log` table will be created to track all status changes on the `delivery_orders` table, as well as any administrative edits or deletions.
+- **Tool:** Flyway will be used to manage all schema changes.
+- **Strategy:** Migrations will be written in SQL and follow a versioned naming convention (e.g., `V20240521_001__create_users_table.sql`).
+- **Rule:** All schema changes, without exception, must be deployed via a Flyway migration script. Manual changes to the database schema are forbidden in all environments.
 
 ---
-This document provides the data architecture blueprint. All database development and data handling logic must conform to these specifications.
+
+## 6. Audit Trail
+
+For the MVP, a simple audit trail will be implemented for status changes on the `delivery_orders` table.
+
+**Table: `order_status_history`**
+
+| Column | Type | Description |
+|---|---|---|
+| `id` | `UUID` | Primary key |
+| `order_id` | `UUID` | The order that was changed (FK to delivery_orders.id) |
+| `old_status`| `VARCHAR(50)`| The status before the change. Can be NULL for initial creation. |
+| `new_status`| `VARCHAR(50)`| The status after the change. |
+| `changed_by_id`| `UUID` | The user who performed the action (FK to users.id) |
+| `timestamp` | `TIMESTAMPTZ` | When the change occurred. |
+
+This table will be populated by a trigger in the backend service logic whenever an order's status is modified.
