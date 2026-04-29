@@ -2,109 +2,70 @@
 
 ## 1. Component Overview
 
+This architecture specifies a decoupled Single-Page Application (SPA) and REST API backend.
+
 ### Backend (Spring Boot 3.x)
 
-- **Root Package:** `com.bosch.shopfloor.supply`
-- **Architecture Pattern:** Controller-Service-Repository
+-   **Language:** Java 21
+-   **Framework:** Spring Boot 3.x
+-   **Root Package:** `com.bosch.shopfloor`
+-   **Architecture Pattern:** Controller-Service-Repository (3-Tier)
 
 **Naming Conventions:**
-- **Controllers:** `DeliveryOrderController.java`, `AdminController.java`
-- **Services:** `DeliveryOrderService.java`, `UserService.java`
-- **Repositories:** `DeliveryOrderRepository.java`, `UserRepository.java`
+-   **Controllers:** Suffix with `Controller` (e.g., `OrderController.java`). Responsible for handling HTTP requests and responses.
+-   **Services:** Suffix with `Service` (e.g., `OrderService.java`). Contains all business logic.
+-   **Repositories:** Suffix with `Repository` (e.g., `OrderRepository.java`). Manages data persistence.
 
 **Rules:**
-- All business logic, including state transitions and validation, **MUST** reside within the Service layer.
-- Role-Based Access Control (RBAC) checks **MUST** be enforced within the Service layer methods, not in the Controller.
+-   All business logic, including state transition validation and security checks, MUST reside exclusively in the **Service layer**.
+-   Role-Based Access Control (RBAC) MUST be enforced within the Service layer methods, aligning with the rules defined in Phase B.
+-   The Controller layer is for request/response handling and translation only; it should not contain business rules.
 
 ---
 
 ### Frontend Standards (Angular 17+)
 
-- **App Prefix:** `sfs` (Shopfloor Supply)
-- **Styling:** Tailwind CSS for a utility-first styling approach.
+-   **Framework:** Angular 17+
+-   **Application Prefix:** `app-shopfloor`
+-   **Styling:** Tailwind CSS for a utility-first CSS workflow.
+-   **Architecture:** Component-based SPA.
 
 **Naming Conventions:**
-- **Components:** `order-list.component.ts`, `create-order.component.ts`, `admin-dashboard.component.ts`
-- **Services:** `order.service.ts`, `auth.service.ts`
+-   **Components:** `*.component.ts` (e.g., `order-list.component.ts`).
+-   **Services:** `*.service.ts` (e.g., `order-api.service.ts`). Responsible for all communication with the backend API.
 
 **Rules:**
-- The UI **MUST** dynamically show/hide controls based on the user's role (e.g., a Warehouse User should not see the "Delete Order" button).
-- The frontend **MUST NOT** contain any business logic that duplicates or bypasses backend rules. It is responsible for presentation only.
+-   The UI MUST be reactive to the user's role. Components should hide or disable controls that the user is not authorized to use (e.g., a Production user should not see a "Delete Order" button).
+-   The frontend MUST NOT contain any business logic that is a duplicate of the backend's. All state changes must be driven by API calls.
 
 ---
 
 ## 2. Integration Contract
 
-- **API Style:** RESTful
-- **Base Path:** `/api/v1`
-- **Format:** JSON (application/json)
-- **Status Codes:**
-  - **200 OK:** Successful GET or PATCH request.
-  - **201 Created:** Successful POST request.
-  - **204 No Content:** Successful DELETE request.
-  - **400 Bad Request:** The request is malformed or violates a business rule (e.g., invalid state transition).
-  - **403 Forbidden:** The user is not authorized to perform the action.
-  - **404 Not Found:** The requested resource (e.g., an order) does not exist.
+-   **API Style:** RESTful
+-   **Base Path:** `/api`
+-   **Data Format:** `application/json` for all request and response bodies.
+-   **Authentication:** Bearer Token (JWT) in the `Authorization` header.
 
 ---
 
 ## 3. Endpoints (Derived from Business Architecture)
 
-### Delivery Orders (`/api/v1/orders`)
+These endpoints are the minimum required to implement the business process defined in Phase B.
 
-- **`GET /api/v1/orders`**
-  - **Description:** Get a list of orders.
-  - **Permissions:**
-    - **Production Line User:** Returns only orders created by them.
-    - **Warehouse User:** Returns orders with `NEW` or `IN_PREPARATION` status.
-    - **Administrator:** Returns all orders.
-  - **Query Params:** `status={status}` to filter by status.
-
-- **`POST /api/v1/orders`**
-  - **Description:** Create a new Delivery Order.
-  - **Permissions:** **Production Line User** only.
-  - **Request Body:** `{ "materialId": "string", "quantity": number, "destination": "string" }`
-  - **Behavior:** Creates an order with `NEW` status.
-
-- **`PATCH /api/v1/orders/{id}/status`**
-  - **Description:** Update the status of a Delivery Order.
-  - **Permissions:**
-    - **Warehouse User:** Can transition `NEW` -> `IN_PREPARATION` and `IN_PREPARATION` -> `IN_TRANSIT`.
-    - **Production Line User:** Can transition `IN_TRANSIT` -> `COMPLETED`.
-    - **Administrator:** Can set any valid status.
-  - **Request Body:** `{ "status": "string" }` (e.g., "IN_PREPARATION").
-  - **Behavior:** The backend Service layer MUST enforce the state transition rules from Phase B.
-
-- **`DELETE /api/v1/orders/{id}`**
-  - **Description:** Delete a Delivery Order.
-  - **Permissions:** **Administrator** only.
+| Method | Endpoint | Role | Description |
+|---|---|---|---|
+| `POST` | `/api/orders` | **Production User** | Creates a new Delivery Order. Request body must contain `materialId`, `quantity`, and `destinationLine`. |
+| `GET` | `/api/orders` | **All Roles** | Retrieves a list of orders. The results will be filtered by the backend based on the user's role (Production users see their own orders, Warehouse/Admin see all). |
+| `GET` | `/api/orders/{id}` | **All Roles** | Retrieves a single order by its ID. Access is subject to the same role-based filtering as the list view. |
+| `PATCH`| `/api/orders/{id}/status`| **Production/Warehouse** | Updates the status of an order according to the business process flow. The request body must contain the new `status` (e.g., `{ "status": "IN_PREPARATION" }`). The backend will enforce valid state transitions. |
+| `PUT` | `/api/orders/{id}/status` | **Admin** | Manually overrides the status of any order (except `COMPLETED`). Used for exception handling. |
+| `DELETE`| `/api/orders/{id}` | **Admin** | Deletes an order. The backend will enforce the rule that only orders in `NEW` state can be deleted. |
 
 ---
 
-## 4. Application Pattern
+## 4. Security Implementation
 
-- **Decoupled Client-Server Architecture:** An Angular Single-Page Application (SPA) will be the client, interacting with a Spring Boot application that serves the REST API. This ensures a clean separation of concerns between the presentation and business logic layers.
-
-- **Java Package:** `com.bosch.shopfloor.supply`
-- **Angular Prefix:** `sfs`
-
----
-
-## 5. Interface Contract (API)
-The API contract is strictly defined by the endpoints in section 3.
-
-- **Base Path:** `/api/v1`
-- **Format:** JSON
-- **Error Handling:**
-  - The API **MUST** return standard HTTP status codes as defined in section 2.
-  - Error responses should include a meaningful message, for example: `{"error": "Invalid state transition from NEW to COMPLETED."}`
-
----
-
-## 6. Security Implementation
-
-- RBAC **MUST** be implemented in the backend's Service layer, likely using Spring Security with method-level annotations (e.g., `@PreAuthorize`).
-- User roles (`PRODUCTION_LINE`, `WAREHOUSE`, `ADMIN`) **MUST** directly correspond to the definitions in Phase B.
-- The frontend is considered an untrusted client. All authorization and business rule enforcement **MUST** happen on the backend.
-
----
+-   **Enforcement Point:** Security, especially RBAC, is enforced on the **backend** in the Service layer. The frontend is considered untrusted.
+-   **Roles:** The roles used for endpoint authorization (`PRODUCTION_USER`, `WAREHOUSE_USER`, `ADMIN`) MUST directly correspond to the Business Actors defined in Phase B.
+-   **Authentication:** The identity of the user MUST be established via a valid JWT before any endpoint can be accessed.
